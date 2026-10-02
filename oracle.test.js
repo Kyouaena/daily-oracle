@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {generateOracle,dateInZone,oracleText,MBTIS} from './oracle.js';
+const now=new Date('2026-10-02T12:00:00Z');
+const p={birthday:'1998-04-16',city:'东京',mbti:'INFP',timezone:'Asia/Tokyo',diet:'all'};
+test('same inputs give a stable daily oracle',()=>assert.deepEqual(generateOracle(p,now),generateOracle(p,new Date('2026-10-02T01:00:00Z'))));
+test('local midnight and DST select the correct date',()=>{assert.equal(dateInZone('Asia/Tokyo',new Date('2026-10-02T15:00:00Z')),'2026-10-03');assert.equal(dateInZone('America/New_York',new Date('2026-10-02T03:59:59Z')),'2026-10-01');assert.equal(dateInZone('America/New_York',new Date('2026-10-02T04:00:00Z')),'2026-10-02');assert.equal(dateInZone('America/New_York',new Date('2026-01-02T04:59:59Z')),'2026-01-01');});
+test('birthday, city, MBTI and date all affect the result',()=>{const a=generateOracle(p,now);for(const patch of [{birthday:'1999-04-16'},{city:'上海'},{mbti:'ESTJ'}]){const b=generateOracle({...p,...patch},now);assert.notEqual(JSON.stringify([a.title,a.actions,a.meals,a.number,a.color]),JSON.stringify([b.title,b.actions,b.meals,b.number,b.color]));}assert.notDeepEqual(a,generateOracle(p,new Date('2026-10-03T12:00:00Z')));});
+test('invalid or future dates and malformed profiles are rejected',()=>{for(const patch of [{birthday:'2025-02-29'},{birthday:'2026-10-03'},{birthday:'1899-01-01'},{city:' '},{city:'x'.repeat(61)},{mbti:'ABCD'},{timezone:'bad'},{diet:'bad'}])assert.throws(()=>generateOracle({...p,...patch},now));assert.doesNotThrow(()=>generateOracle({...p,birthday:'2000-02-29'},now));});
+test('vegetarian meals exclude meat and fish for all types across a month',()=>{for(const mbti of MBTIS)for(let day=1;day<=28;day++){const o=generateOracle({...p,mbti,diet:'vegetarian'},new Date(`2026-10-${String(day).padStart(2,'0')}T12:00:00Z`));assert.equal(o.meals.length,3);assert.doesNotMatch(o.meals.map(m=>m[0]).join(''),/鸡肉|鱼|牛肉|猪肉|虾/);assert.equal(o.actions.length,2);assert.ok(o.number>=1&&o.number<=9);}});
+test('copy output excludes birthday and includes date and boundaries',()=>{const text=oracleText(generateOracle(p,now));assert.ok(!text.includes(p.birthday));assert.match(text,/2026-10-02/);assert.match(text,/仅供娱乐/);});
